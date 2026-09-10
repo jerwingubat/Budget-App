@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useCollection } from '../hooks/useFirestore';
 import { fmt, fmtCompact, today } from '../utils';
-import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable } from '../components/UI';
+import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs } from '../components/UI';
 
 export default function Debts() {
   const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
@@ -11,12 +11,49 @@ export default function Debts() {
   const [payModal, setPayModal] = useState(null);
   const [quickPay, setQuickPay] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [customAmount, setCustomAmount] = useState('');
+  const [customStrategy, setCustomStrategy] = useState('snowball');
 
   const stats = useMemo(() => ({
     total: debts.reduce((s, d) => s + (d.balance || 0), 0),
     monthly: debts.reduce((s, d) => s + (d.minPayment || 0), 0),
     interest: debts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100 / 12), 0),
   }), [debts]);
+
+  const customAlloc = useMemo(() => {
+    if (!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0) return null;
+    let amount = parseFloat(customAmount);
+    const order = [...debts].sort((a, b) => {
+      if (customStrategy === 'avalanche') return (b.rate || 0) - (a.rate || 0);
+      return (a.balance || 0) - (b.balance || 0);
+    });
+    const allocations = [];
+    for (const d of order) {
+      if (amount <= 0 || d.balance <= 0) break;
+      const pay = Math.min(amount, d.balance);
+      allocations.push({ debt: d, amount: pay });
+      amount -= pay;
+    }
+    return { allocations, unused: amount, allocated: parseFloat(customAmount) - amount };
+  }, [debts, customAmount, customStrategy]);
+
+  const handleCustomPay = async () => {
+    if (!customAlloc || customAlloc.allocations.length === 0) return;
+    const date = today();
+    try {
+      for (const { debt, amount } of customAlloc.allocations) {
+        await addPayment({ debtId: debt.id, amount, date });
+        await updateDebt(debt.id, { balance: Math.max(0, debt.balance - amount) });
+      }
+      const paid = customAlloc.allocated;
+      addToast(customAlloc.unused > 0
+        ? `Payment of ${fmt(paid)} applied · ${fmt(customAlloc.unused)} left after payoff`
+        : `Payment of ${fmt(paid)} applied`, 'success');
+      setCustomAmount('');
+    } catch {
+      addToast('Something went wrong', 'error');
+    }
+  };
 
   const handleDebtSubmit = async (e) => {
     e.preventDefault();
@@ -107,6 +144,79 @@ export default function Debts() {
           <div className="kpi-label">Interest / Month</div>
           <div className="kpi-amount">{fmtCompact(stats.interest)}</div>
         </div>
+      </div>
+
+      <div className="panel custom-pay-panel">
+        <div className="panel-head">
+          <h3>Make a Custom Payment</h3>
+        </div>
+        <div className="custom-pay-row">
+          <div className="custom-pay-field">
+            <label>Amount</label>
+            <div className="custom-pay-input-wrap">
+              <span className="custom-pay-currency">₱</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                value={customAmount}
+                onChange={e => setCustomAmount(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCustomPay()}
+              />
+            </div>
+          </div>
+          <div className="custom-pay-field">
+            <label>Strategy</label>
+            <Tabs
+              tabs={[
+                { value: 'snowball', label: 'Snowball' },
+                { value: 'avalanche', label: 'Avalanche' },
+              ]}
+              active={customStrategy}
+              onChange={setCustomStrategy}
+            />
+            <span className="custom-pay-hint">
+              {customStrategy === 'snowball' ? 'Pays off smallest balance first' : 'Pays off highest APR first'}
+            </span>
+          </div>
+        </div>
+
+        {customAlloc && customAlloc.allocations.length > 0 ? (
+          <>
+            <div className="custom-pay-preview">
+              {customAlloc.allocations.map(a => {
+                const paidOff = a.amount >= (a.debt.balance || 0);
+                const newBalance = Math.max(0, a.debt.balance - a.amount);
+                return (
+                  <div key={a.debt.id} className="custom-pay-item">
+                    <div className="custom-pay-item-main">
+                      <span className="custom-pay-name">{a.debt.name}</span>
+                      {paidOff && <span className="badge badge-paid">Paid off</span>}
+                      <span className="custom-pay-new-bal">{fmt(newBalance)} left</span>
+                    </div>
+                    <span className="custom-pay-amount">-{fmt(a.amount)}</span>
+                  </div>
+                );
+              })}
+              {customAlloc.unused > 0 && (
+                <div className="custom-pay-unused">₱{customAlloc.unused.toFixed(2)} remaining after paying off all debts</div>
+              )}
+            </div>
+            <div className="custom-pay-footer">
+              <span className="custom-pay-total">
+                Total after: <strong>{fmt(Math.max(0, stats.total - customAlloc.allocated))}</strong>
+              </span>
+              <button className="btn btn-primary" onClick={handleCustomPay} disabled={customAlloc.allocations.length === 0}>
+                Apply Payment
+              </button>
+            </div>
+          </>
+        ) : (
+          customAmount && customAlloc && (
+            <p className="custom-pay-hint">All debts are paid off. Nothing to allocate.</p>
+          )
+        )}
       </div>
 
       {debts.length === 0 ? (
