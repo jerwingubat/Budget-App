@@ -1,19 +1,21 @@
 import { useState, useMemo } from 'react';
 import { useCollection } from '../hooks/useFirestore';
-import { fmt, today } from '../utils';
-import { Modal, FormField, FormRow, ProgressBar, EmptyState } from '../components/UI';
+import { fmt, fmtCompact, today } from '../utils';
+import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable } from '../components/UI';
 
 export default function Debts() {
-  const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt } = useCollection('debts');
+  const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
   const { items: payments, add: addPayment, remove: removePayment } = useCollection('payments');
+  const { addToast } = useToast();
   const [debtModal, setDebtModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
   const [quickPay, setQuickPay] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const stats = useMemo(() => ({
     total: debts.reduce((s, d) => s + (d.balance || 0), 0),
     monthly: debts.reduce((s, d) => s + (d.minPayment || 0), 0),
-    interest: debts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100), 0),
+    interest: debts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100 / 12), 0),
   }), [debts]);
 
   const handleDebtSubmit = async (e) => {
@@ -27,12 +29,18 @@ export default function Debts() {
       minPayment: parseFloat(f.minPayment.value),
       dueDate: f.dueDate.value,
     };
-    if (debtModal?.id) {
-      await updateDebt(debtModal.id, entry);
-    } else {
-      await addDebt(entry);
+    try {
+      if (debtModal?.id) {
+        await updateDebt(debtModal.id, entry);
+        addToast('Debt updated', 'success');
+      } else {
+        await addDebt(entry);
+        addToast('Debt added', 'success');
+      }
+      setDebtModal(null);
+    } catch {
+      addToast('Something went wrong', 'error');
     }
-    setDebtModal(null);
   };
 
   const handlePaySubmit = async (e) => {
@@ -42,94 +50,128 @@ export default function Debts() {
     const amount = parseFloat(f.amount.value);
     await addPayment({ debtId, amount, date: f.date.value });
     const debt = debts.find(d => d.id === debtId);
-    if (debt) {
-      await updateDebt(debtId, { balance: Math.max(0, debt.balance - amount) });
-    }
+    if (debt) await updateDebt(debtId, { balance: Math.max(0, debt.balance - amount) });
+    addToast('Payment recorded', 'success');
     setPayModal(null);
     setQuickPay(null);
   };
 
-  const handleDeleteDebt = async (id) => {
-    if (!confirm('Delete this debt?')) return;
-    await removeDebt(id);
+  const handleDeleteDebt = async () => {
+    if (!deleteConfirm) return;
+    await removeDebt(deleteConfirm.id);
+    addToast('Debt deleted', 'success');
+    setDeleteConfirm(null);
   };
 
-  const handleDeletePayment = async (id) => {
-    if (!confirm('Delete this payment?')) return;
-    const p = payments.find(pp => pp.id === id);
-    if (p) {
-      const debt = debts.find(d => d.id === p.debtId);
-      if (debt) await updateDebt(debt.id, { balance: debt.balance + p.amount });
-    }
-    await removePayment(id);
+  const handleDeletePayment = async (p) => {
+    const debt = debts.find(d => d.id === p.debtId);
+    if (debt) await updateDebt(debt.id, { balance: debt.balance + p.amount });
+    await removePayment(p.id);
+    addToast('Payment deleted', 'success');
   };
 
-  const sortedPayments = [...payments].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sortedPayments = useMemo(() => [...payments].sort((a, b) => (b.date || '').localeCompare(a.date || '')), [payments]);
+
+  if (loading) {
+    return (
+      <div>
+        <div className="page-header"><h1>Debt Tracker</h1></div>
+        <SkeletonTable rows={3} cols={4} />
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h1>Debt Tracker</h1>
-      <div className="toolbar">
+      <div className="page-header">
+        <div>
+          <h1>Debt Tracker</h1>
+          <p className="page-sub">{debts.length} debt{debts.length !== 1 ? 's' : ''}</p>
+        </div>
         <button className="btn btn-primary" onClick={() => setDebtModal({})}>+ Add Debt</button>
       </div>
-      <div className="summary-cards" style={{ marginBottom: '2rem' }}>
-        <div className="card debt-summary"><h3>Total Debt</h3><p className="amount">{fmt(stats.total)}</p></div>
-        <div className="card expenses"><h3>Monthly Payments</h3><p className="amount">{fmt(stats.monthly)}</p></div>
-        <div className="card income"><h3>Interest Paid/Year</h3><p className="amount">{fmt(stats.interest)}</p></div>
+
+      <div className="kpi-grid kpi-3">
+        <div className="kpi-card kpi-danger">
+          <div className="kpi-header"><span className="kpi-icon" style={{ background: '#ef444418', color: '#ef4444' }}>▲</span></div>
+          <div className="kpi-label">Total Debt</div>
+          <div className="kpi-amount">{fmtCompact(stats.total)}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-header"><span className="kpi-icon" style={{ background: '#f59e0b18', color: '#f59e0b' }}>◇</span></div>
+          <div className="kpi-label">Min. Monthly</div>
+          <div className="kpi-amount">{fmtCompact(stats.monthly)}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-header"><span className="kpi-icon" style={{ background: '#8b5cf618', color: '#8b5cf6' }}>~</span></div>
+          <div className="kpi-label">Interest / Month</div>
+          <div className="kpi-amount">{fmtCompact(stats.interest)}</div>
+        </div>
       </div>
+
       {debts.length === 0 ? (
-        <EmptyState message="No debts tracked. Add one to start." />
+        <div className="panel"><EmptyState icon="▲" message="No debts tracked. Add one to start." /></div>
       ) : (
-        <div className="debts-list">
+        <div className="debts-grid">
           {debts.map(d => {
             const paid = (d.original || 0) - (d.balance || 0);
             const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
             return (
               <div key={d.id} className="debt-card">
-                <h4>{d.name}<span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>{d.rate}% APR</span></h4>
-                <div className="debt-detail"><small>Balance</small><span>{fmt(d.balance)}</span></div>
-                <div className="debt-detail"><small>Original</small><span>{fmt(d.original)}</span></div>
-                <div className="debt-detail"><small>Min Payment</small><span>{fmt(d.minPayment)}/mo</span></div>
-                <div className="debt-detail"><small>Due</small><span>{d.dueDate}</span></div>
-                <div style={{ marginTop: '0.75rem' }}>
-                  <div className="budget-amounts"><span>Paid off</span><span>{pct.toFixed(0)}%</span></div>
-                  <ProgressBar percent={pct} />
+                <div className="debt-card-head">
+                  <h4>{d.name}</h4>
+                  <span className="debt-rate">{d.rate}% APR</span>
                 </div>
-                <div className="debt-actions">
-                  <button className="btn btn-sm btn-primary" onClick={() => setQuickPay(d)}>Pay</button>
-                  <button className="btn btn-sm btn-secondary" onClick={() => setDebtModal(d)}>Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDeleteDebt(d.id)}>Del</button>
+                <div className="debt-balance">{fmt(d.balance)}</div>
+                <ProgressBar percent={pct} size="small" />
+                <div className="debt-card-body">
+                  <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+                  <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+                  <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+                  <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+                </div>
+                <div className="card-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
+                  <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
+                  <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-      <div className="panel" style={{ marginTop: '2rem' }}>
-        <h3>Payment History</h3>
-        <table className="data-table">
-          <thead><tr><th>Date</th><th>Debt</th><th>Amount</th><th>Actions</th></tr></thead>
-          <tbody>
-            {sortedPayments.length === 0 ? (
-              <tr><td colSpan="4"><EmptyState message="No payments recorded" /></td></tr>
-            ) : sortedPayments.map(p => {
-              const debt = debts.find(d => d.id === p.debtId);
-              return (
-                <tr key={p.id}>
-                  <td>{p.date}</td>
-                  <td>{debt?.name || 'Unknown'}</td>
-                  <td className="tx-amount income">{fmt(p.amount)}</td>
-                  <td><button className="btn btn-sm btn-danger" onClick={() => handleDeletePayment(p.id)}>Del</button></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <button className="btn btn-secondary" style={{ marginTop: '1rem' }} onClick={() => setPayModal(true)}>+ Record Payment</button>
-      </div>
+
+      {sortedPayments.length > 0 && (
+        <div className="panel" style={{ marginTop: '2rem' }}>
+          <div className="panel-head">
+            <h3>Payment History</h3>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPayModal(true)}>+ Record Payment</button>
+          </div>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Date</th><th>Debt</th><th>Amount</th><th>Actions</th></tr></thead>
+              <tbody>
+                {sortedPayments.map(p => {
+                  const debt = debts.find(d => d.id === p.debtId);
+                  return (
+                    <tr key={p.id}>
+                      <td className="td-date">{p.date}</td>
+                      <td><span className="cat-badge">{debt?.name || 'Unknown'}</span></td>
+                      <td className="tx-amount income">{fmt(p.amount)}</td>
+                      <td className="td-actions">
+                        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => handleDeletePayment(p)}>✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {debtModal !== null && (
-        <Modal title={debtModal.id ? 'Edit Debt' : 'Add Debt'} onClose={() => setDebtModal(null)}>
+        <Modal title={debtModal.id ? 'Edit Debt' : 'New Debt'} onClose={() => setDebtModal(null)} wide>
           <form onSubmit={handleDebtSubmit}>
             <FormField label="Debt Name">
               <input type="text" name="name" defaultValue={debtModal.name || ''} placeholder="e.g. Student Loan" required />
@@ -154,8 +196,8 @@ export default function Debts() {
               <input type="date" name="dueDate" defaultValue={debtModal.dueDate || ''} required />
             </FormField>
             <div className="form-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setDebtModal(null)}>Cancel</button>
-              <button type="submit" className="btn btn-primary">{debtModal.id ? 'Update' : 'Add'}</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDebtModal(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">{debtModal.id ? 'Save Changes' : 'Add Debt'}</button>
             </div>
           </form>
         </Modal>
@@ -165,9 +207,10 @@ export default function Debts() {
         <Modal title="Make Payment" onClose={() => { setQuickPay(null); setPayModal(null); }}>
           <form onSubmit={handlePaySubmit}>
             {quickPay && (
-              <FormField label="Debt">
-                <input type="text" value={quickPay.name} disabled />
-              </FormField>
+              <>
+                <div className="pay-debt-name">{quickPay.name}</div>
+                <p className="form-label-text">Balance: <strong>{fmt(quickPay.balance)}</strong></p>
+              </>
             )}
             {payModal && (
               <FormField label="Debt">
@@ -186,10 +229,20 @@ export default function Debts() {
               </FormField>
             </FormRow>
             <div className="form-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => { setQuickPay(null); setPayModal(null); }}>Cancel</button>
+              <button type="button" className="btn btn-ghost" onClick={() => { setQuickPay(null); setPayModal(null); }}>Cancel</button>
               <button type="submit" className="btn btn-primary">Pay</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {deleteConfirm && (
+        <Modal title="Delete Debt" onClose={() => setDeleteConfirm(null)}>
+          <p className="confirm-text">Delete <strong>{deleteConfirm.name}</strong>?</p>
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+            <button className="btn btn-danger" onClick={handleDeleteDebt}>Delete</button>
+          </div>
         </Modal>
       )}
     </div>

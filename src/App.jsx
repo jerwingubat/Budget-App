@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,38 +9,27 @@ import CreditCards from './pages/CreditCards';
 import Debts from './pages/Debts';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
-import './App.css';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
+  if (loading) return <div className="login-page"><div className="spinner" /></div>;
   if (!user) return <Navigate to="/login" />;
-  return children;
-}
-
-function AppRoutes() {
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="budgets" element={<Budgets />} />
-        <Route path="credit" element={<CreditCards />} />
-        <Route path="debts" element={<Debts />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-    </Routes>
-  );
+  return <Layout>{children}</Layout>;
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+        <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
+        <Route path="/credit-cards" element={<ProtectedRoute><CreditCards /></ProtectedRoute>} />
+        <Route path="/debts" element={<ProtectedRoute><Debts /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+      </Routes>
+    </BrowserRouter>
   );
 }
