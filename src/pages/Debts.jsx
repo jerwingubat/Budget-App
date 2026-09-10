@@ -20,11 +20,17 @@ export default function Debts() {
   const [filter, setFilter] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
 
+  const categoryDebts = useMemo(() => {
+    if (filterCat === 'all') return debts;
+    if (filterCat === 'other') return debts.filter(d => !(d.category || '').trim());
+    return debts.filter(d => (d.category || '').trim() === filterCat);
+  }, [debts, filterCat]);
+
   const stats = useMemo(() => ({
-    total: debts.reduce((s, d) => s + (d.balance || 0), 0),
-    monthly: debts.reduce((s, d) => s + (d.minPayment || 0), 0),
-    interest: debts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100 / 12), 0),
-  }), [debts]);
+    total: categoryDebts.reduce((s, d) => s + (d.balance || 0), 0),
+    monthly: categoryDebts.reduce((s, d) => s + (d.minPayment || 0), 0),
+    interest: categoryDebts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100 / 12), 0),
+  }), [categoryDebts]);
 
   const paidCount = debts.filter(d => (d.balance || 0) <= 0).length;
   const unpaidCount = debts.length - paidCount;
@@ -62,7 +68,7 @@ export default function Debts() {
   const customAlloc = useMemo(() => {
     if (!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0) return null;
     let amount = parseFloat(customAmount);
-    const order = [...debts].sort((a, b) => {
+    const order = [...categoryDebts].sort((a, b) => {
       if (customStrategy === 'avalanche') return (b.rate || 0) - (a.rate || 0);
       return (a.balance || 0) - (b.balance || 0);
     });
@@ -75,7 +81,7 @@ export default function Debts() {
       amount -= pay;
     }
     return { allocations, unused: amount, allocated: parseFloat(customAmount) - amount };
-  }, [debts, customAmount, customStrategy]);
+  }, [categoryDebts, customAmount, customStrategy]);
 
   const handleCustomPay = async () => {
     if (!customAlloc || customAlloc.allocations.length === 0) return;
@@ -251,6 +257,12 @@ export default function Debts() {
         <div className="panel-head">
           <h3>Make a Custom Payment</h3>
         </div>
+        {filterCat !== 'all' && (
+          <p className="custom-pay-hint custom-pay-scope">
+            Applying only to <strong>{filterCat === 'other' ? 'Uncategorized' : filterCat}</strong>
+            {' · '}{categoryDebts.filter(d => (d.balance || 0) > 0).length} unpaid · {fmt(categoryDebts.reduce((s, d) => s + (d.balance || 0), 0))} remaining
+          </p>
+        )}
         <div className="custom-pay-row">
           <div className="custom-pay-field">
             <label>Amount</label>
