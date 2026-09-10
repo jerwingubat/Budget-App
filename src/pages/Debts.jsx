@@ -30,6 +30,25 @@ export default function Debts() {
     return debts;
   }, [debts, filter]);
 
+  const personNames = useMemo(() =>
+    [...new Set(debts.map(d => (d.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  , [debts]);
+
+  const grouped = useMemo(() => {
+    const groups = {};
+    visibleDebts.forEach(d => {
+      const key = (d.category || '').trim() || 'Other';
+      (groups[key] = groups[key] || []).push(d);
+    });
+    return Object.entries(groups)
+      .map(([person, list]) => ({
+        person,
+        list,
+        subtotal: list.reduce((s, d) => s + (d.balance || 0), 0),
+      }))
+      .sort((a, b) => b.subtotal - a.subtotal);
+  }, [visibleDebts]);
+
   const customAlloc = useMemo(() => {
     if (!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0) return null;
     let amount = parseFloat(customAmount);
@@ -75,6 +94,7 @@ export default function Debts() {
       rate: parseFloat(f.rate.value),
       minPayment: parseFloat(f.minPayment.value),
       dueDate: f.dueDate.value,
+      category: (f.category?.value || '').trim(),
     };
     try {
       if (debtModal?.id) {
@@ -252,32 +272,46 @@ export default function Debts() {
           />
         </div>
       ) : (
-        <div className="debts-grid">
-          {visibleDebts.map(d => {
-            const paid = (d.original || 0) - (d.balance || 0);
-            const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-            return (
-              <div key={d.id} className="debt-card">
-                <div className="debt-card-head">
-                  <h4>{d.name}</h4>
-                  <span className="debt-rate">{d.rate}% APR</span>
+        <div className="debt-groups">
+          {grouped.map(g => (
+            <div key={g.person} className="debt-group">
+              <div className="debt-group-head">
+                <div className="debt-group-title">
+                  <span className="debt-group-icon">{g.person === 'Other' ? '🏷' : '👤'}</span>
+                  <span className="debt-group-name">{g.person}</span>
+                  <span className="debt-group-count">{g.list.length} debt{g.list.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="debt-balance">{fmt(d.balance)}</div>
-                <ProgressBar percent={pct} size="small" />
-                <div className="debt-card-body">
-                  <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
-                  <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
-                  <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
-                  <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
-                </div>
-                <div className="card-actions">
-                  <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
-                  <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
-                  <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
-                </div>
+                <span className="debt-group-total">{fmt(g.subtotal)}</span>
               </div>
-            );
-          })}
+              <div className="debts-grid">
+                {g.list.map(d => {
+                  const paid = (d.original || 0) - (d.balance || 0);
+                  const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                  return (
+                    <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
+                      <div className="debt-card-head">
+                        <h4>{d.name}</h4>
+                        <span className="debt-rate">{d.rate}% APR</span>
+                      </div>
+                      <div className="debt-balance">{fmt(d.balance)}</div>
+                      <ProgressBar percent={pct} size="small" />
+                      <div className="debt-card-body">
+                        <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+                        <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+                        <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+                        <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+                      </div>
+                      <div className="card-actions">
+                        <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
+                        <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
+                        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -315,6 +349,12 @@ export default function Debts() {
           <form onSubmit={handleDebtSubmit}>
             <FormField label="Debt Name">
               <input type="text" name="name" defaultValue={debtModal.name || ''} placeholder="e.g. Student Loan" required />
+            </FormField>
+            <FormField label="Person / Category" hint="Group this debt under a person or lender (e.g. Juan, Maria, Bank Name). Type a new name to create a category.">
+              <input type="text" name="category" list="person-names" defaultValue={debtModal.category || ''} placeholder="e.g. Juan, Maria, or Bank Name" />
+              <datalist id="person-names">
+                {personNames.map(n => <option key={n} value={n} />)}
+              </datalist>
             </FormField>
             <FormRow>
               <FormField label="Current Balance">
