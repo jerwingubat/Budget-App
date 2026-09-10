@@ -524,3 +524,23 @@ a { color: var(--primary); text-decoration: none; }
   .modal-body { padding: 16px; }
   .data-table th, .data-table td { padding: 8px 10px; font-size: 0.78rem; }
 }
+
+/* ─── PWA Install Banner ────────────────────────────────── */
+.pwa-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: var(--bg-elevated); border: 1px solid var(--primary);
+  border-radius: var(--radius); animation: slideUp .2s ease;
+}
+.pwa-banner-content { display: flex; align-items: center; gap: 12px; }
+.pwa-banner-icon { font-size: 1.5rem; }
+.pwa-banner-text { display: flex; flex-direction: column; }
+.pwa-banner-text strong { font-size: 0.88rem; font-weight: 600; }
+.pwa-banner-text span { font-size: 0.75rem; color: var(--text-dim); }
+.pwa-banner-actions { display: flex; align-items: center; gap: 6px; }
+
+@media (max-width: 768px) {
+  .pwa-banner { flex-direction: column; gap: 12px; text-align: center; }
+  .pwa-banner-content { flex-direction: column; }
+  .pwa-banner-actions { width: 100%; justify-content: center; }
+}

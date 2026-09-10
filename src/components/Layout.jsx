@@ -1,6 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useOnlineStatus } from './UI';
+import { useOnlineStatus, PWAInstallBanner } from './UI';
 
 const NAV = [
   { to: '/', icon: '◈', label: 'Dashboard' },
@@ -52,6 +52,7 @@ export default function Layout({ children }) {
 
       {/* Main Content */}
       <main className="main-content">
+        <PWAInstallBanner />
         {children}
       </main>
 

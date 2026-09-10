@@ -188,3 +188,54 @@ export function useOnlineStatus() {
   }, []);
   return online;
 }
+
+// ─── PWA Install Prompt ─────────────────────────────────────────
+export function PWAInstallBanner() {
+  const [show, setShow] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem('pwa-dismissed') === '1'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (dismissed) return;
+    const handler = () => setShow(true);
+    if (window.__pwaInstallPrompt) { setShow(true); return; }
+    window.addEventListener('pwa-installable', handler);
+    return () => window.removeEventListener('pwa-installable', handler);
+  }, [dismissed]);
+
+  const handleInstall = async () => {
+    const prompt = window.__pwaInstallPrompt;
+    if (!prompt) return;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    if (outcome === 'accepted') {
+      setShow(false);
+      try { sessionStorage.setItem('pwa-dismissed', '1'); } catch {}
+    }
+  };
+
+  const handleDismiss = () => {
+    setShow(false);
+    setDismissed(true);
+    try { sessionStorage.setItem('pwa-dismissed', '1'); } catch {}
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="pwa-banner">
+      <div className="pwa-banner-content">
+        <span className="pwa-banner-icon">📱</span>
+        <div className="pwa-banner-text">
+          <strong>Install BudgetFlow</strong>
+          <span>Add to your home screen for quick access</span>
+        </div>
+      </div>
+      <div className="pwa-banner-actions">
+        <button className="btn btn-primary btn-sm" onClick={handleInstall}>Install</button>
+        <button className="btn btn-ghost btn-sm" onClick={handleDismiss}>✕</button>
+      </div>
+    </div>
+  );
+}
