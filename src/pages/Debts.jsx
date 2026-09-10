@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useCollection } from '../hooks/useFirestore';
-import { fmt, fmtCompact, today } from '../utils';
+import { fmt, today } from '../utils';
 import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs } from '../components/UI';
 
 export default function Debts() {
@@ -11,9 +11,14 @@ export default function Debts() {
   const [payModal, setPayModal] = useState(null);
   const [quickPay, setQuickPay] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [moveModal, setMoveModal] = useState(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [customStrategy, setCustomStrategy] = useState('snowball');
   const [filter, setFilter] = useState('all');
+  const [filterCat, setFilterCat] = useState('all');
 
   const stats = useMemo(() => ({
     total: debts.reduce((s, d) => s + (d.balance || 0), 0),
@@ -25,10 +30,15 @@ export default function Debts() {
   const unpaidCount = debts.length - paidCount;
 
   const visibleDebts = useMemo(() => {
-    if (filter === 'paid') return debts.filter(d => (d.balance || 0) <= 0);
-    if (filter === 'unpaid') return debts.filter(d => (d.balance || 0) > 0);
-    return debts;
-  }, [debts, filter]);
+    let list = debts;
+    if (filter === 'paid') list = list.filter(d => (d.balance || 0) <= 0);
+    if (filter === 'unpaid') list = list.filter(d => (d.balance || 0) > 0);
+    if (filterCat !== 'all') {
+      if (filterCat === 'other') list = list.filter(d => !(d.category || '').trim());
+      else list = list.filter(d => (d.category || '').trim() === filterCat);
+    }
+    return list;
+  }, [debts, filter, filterCat]);
 
   const personNames = useMemo(() =>
     [...new Set(debts.map(d => (d.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
@@ -130,6 +140,66 @@ export default function Debts() {
     setDeleteConfirm(null);
   };
 
+  const handleMoveSubmit = async (e) => {
+    e.preventDefault();
+    if (!moveModal) return;
+    const f = e.target;
+    const newCat = (f.newCat?.value || '').trim();
+    const category = newCat || f.existing?.value || '';
+    try {
+      await updateDebt(moveModal.id, { category });
+      addToast(
+        category ? `Moved "${moveModal.name}" to ${category}` : `Moved "${moveModal.name}" to Other`,
+        'success'
+      );
+      setMoveModal(null);
+    } catch {
+      addToast('Something went wrong', 'error');
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected(prev => {
+      const visibleIds = visibleDebts.map(d => d.id);
+      const allSelected = visibleIds.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) visibleIds.forEach(id => next.delete(id));
+      else visibleIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => { setSelecting(false); setSelected(new Set()); };
+
+  const handleBulkMoveSubmit = async (e) => {
+    e.preventDefault();
+    if (!bulkMoveOpen || selected.size === 0) return;
+    const f = e.target;
+    const newCat = (f.newCat?.value || '').trim();
+    const category = newCat || f.existing?.value || '';
+    try {
+      for (const id of selected) {
+        await updateDebt(id, { category });
+      }
+      addToast(
+        `Moved ${selected.size} debt${selected.size > 1 ? 's' : ''} to ${category || 'Other'}`,
+        'success'
+      );
+      setBulkMoveOpen(false);
+      exitSelectMode();
+    } catch {
+      addToast('Something went wrong', 'error');
+    }
+  };
+
   const handleDeletePayment = async (p) => {
     const debt = debts.find(d => d.id === p.debtId);
     if (debt) await updateDebt(debt.id, { balance: debt.balance + p.amount });
@@ -162,17 +232,17 @@ export default function Debts() {
         <div className="kpi-card kpi-danger">
           <div className="kpi-header"><span className="kpi-icon" style={{ background: '#ef444418', color: '#ef4444' }}>▲</span></div>
           <div className="kpi-label">Total Debt</div>
-          <div className="kpi-amount">{fmtCompact(stats.total)}</div>
+          <div className="kpi-amount">{fmt(stats.total)}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-header"><span className="kpi-icon" style={{ background: '#f59e0b18', color: '#f59e0b' }}>◇</span></div>
           <div className="kpi-label">Min. Monthly</div>
-          <div className="kpi-amount">{fmtCompact(stats.monthly)}</div>
+          <div className="kpi-amount">{fmt(stats.monthly)}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-header"><span className="kpi-icon" style={{ background: '#8b5cf618', color: '#8b5cf6' }}>~</span></div>
           <div className="kpi-label">Interest / Month</div>
-          <div className="kpi-amount">{fmtCompact(stats.interest)}</div>
+          <div className="kpi-amount">{fmt(stats.interest)}</div>
         </div>
       </div>
 
@@ -249,7 +319,7 @@ export default function Debts() {
         )}
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar toolbar-inline">
         <Tabs
           tabs={[
             { value: 'all', label: `All (${debts.length})` },
@@ -259,7 +329,41 @@ export default function Debts() {
           active={filter}
           onChange={setFilter}
         />
+        <button
+          className={`btn ${selecting ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+          onClick={() => selecting ? exitSelectMode() : setSelecting(true)}
+        >
+          {selecting ? 'Done' : 'Select'}
+        </button>
+        <select
+          className="filter-select"
+          value={filterCat}
+          onChange={e => { setFilterCat(e.target.value); setSelected(new Set()); }}
+        >
+          <option value="all">All categories (👤)</option>
+          {personNames.map(n =>
+            <option key={n} value={n}>👤 {n}</option>
+          )}
+          {debts.some(d => !(d.category || '').trim()) && (
+            <option value="other">🏷 Uncategorized</option>
+          )}
+        </select>
       </div>
+
+      {selecting && (
+        <div className="select-mode-bar">
+          <span className="select-count">
+            <strong>{selected.size}</strong> selected
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={toggleSelectAll}>Select all</button>
+          <div className="select-actions">
+            <button className="btn btn-primary btn-sm" disabled={selected.size === 0} onClick={() => setBulkMoveOpen(true)}>
+              Move to category
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear</button>
+          </div>
+        </div>
+      )}
 
       {debts.length === 0 ? (
         <div className="panel"><EmptyState icon="▲" message="No debts tracked. Add one to start." /></div>
@@ -267,8 +371,16 @@ export default function Debts() {
         <div className="panel">
           <EmptyState
             icon="✓"
-            message={filter === 'paid' ? 'No paid debts yet' : 'All debts are paid off'}
-            action={filter !== 'all' ? <button className="btn btn-ghost btn-sm" onClick={() => setFilter('all')}>Show all debts</button> : null}
+            message={
+              filterCat !== 'all'
+                ? 'No debts match this category'
+                : filter === 'paid'
+                  ? 'No paid debts yet'
+                  : 'All debts are paid off'
+            }
+            action={filter !== 'all' || filterCat !== 'all'
+              ? <button className="btn btn-ghost btn-sm" onClick={() => { setFilter('all'); setFilterCat('all'); }}>Show all debts</button>
+              : null}
           />
         </div>
       ) : (
@@ -287,25 +399,41 @@ export default function Debts() {
                 {g.list.map(d => {
                   const paid = (d.original || 0) - (d.balance || 0);
                   const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                  const isSel = selected.has(d.id);
                   return (
-                    <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
+                    <div
+                      key={d.id}
+                      className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
+                      onClick={selecting ? () => toggleSelect(d.id) : undefined}
+                    >
+                      {selecting && (
+                        <div className={`debt-select-check ${isSel ? 'checked' : ''}`}>
+                          {isSel ? '✓' : ''}
+                        </div>
+                      )}
                       <div className="debt-card-head">
                         <h4>{d.name}</h4>
                         <span className="debt-rate">{d.rate}% APR</span>
                       </div>
                       <div className="debt-balance">{fmt(d.balance)}</div>
                       <ProgressBar percent={pct} size="small" />
+                      <div className="debt-category-badge">
+                        <span className="debt-cat-icon">👤</span> {g.person}
+                      </div>
                       <div className="debt-card-body">
                         <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
                         <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
                         <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
                         <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
                       </div>
-                      <div className="card-actions">
-                        <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
-                        <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
-                        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
-                      </div>
+                      {!selecting && (
+                        <div className="card-actions">
+                          <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
+                          <button className="btn-icon" title="Move to category" onClick={() => setMoveModal(d)}>⇄</button>
+                          <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
+                          <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -423,6 +551,50 @@ export default function Debts() {
             <button className="btn btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
             <button className="btn btn-danger" onClick={handleDeleteDebt}>Delete</button>
           </div>
+        </Modal>
+      )}
+
+      {moveModal && (
+        <Modal title={`Move "${moveModal.name}"`} onClose={() => setMoveModal(null)}>
+          <form onSubmit={handleMoveSubmit}>
+            <FormField label="Existing category" hint={moveModal.category ? `Currently in "${moveModal.category}"` : 'Currently uncategorized'}>
+              <select name="existing" defaultValue="">
+                <option value="">-- Select a category --</option>
+                {personNames
+                  .filter(n => n !== (moveModal.category || '').trim())
+                  .map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Or create a new category">
+              <input type="text" name="newCat" placeholder="e.g. Maria, Kuya Alex..." />
+            </FormField>
+            <p className="custom-pay-hint">Leave both blank to move to "Other".</p>
+            <div className="form-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setMoveModal(null)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Move</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {bulkMoveOpen && (
+        <Modal title={`Move ${selected.size} Debt${selected.size > 1 ? 's' : ''} to Category`} onClose={() => setBulkMoveOpen(false)}>
+          <form onSubmit={handleBulkMoveSubmit}>
+            <FormField label="Existing category">
+              <select name="existing" defaultValue="">
+                <option value="">-- Select a category --</option>
+                {personNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Or create a new category">
+              <input type="text" name="newCat" placeholder="e.g. Maria, Kuya Alex..." />
+            </FormField>
+            <p className="custom-pay-hint">Leave both blank to move to "Other".</p>
+            <div className="form-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setBulkMoveOpen(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Move {selected.size} Debt{selected.size > 1 ? 's' : ''}</button>
+            </div>
+          </form>
         </Modal>
       )}
     </div>
