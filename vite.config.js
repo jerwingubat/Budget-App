@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
   ]
 
   return {
+    appType: 'spa',
     define: Object.fromEntries(
       keys.map(k => [k, JSON.stringify(obfuscate(env[k] || ''))])
     ),

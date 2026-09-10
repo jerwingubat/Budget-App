@@ -2,7 +2,7 @@
   "name": "BudgetFlow",
   "short_name": "BudgetFlow",
   "description": "Track income, expenses, budgets, credit cards & debts",
-  "start_url": "/",
+  "start_url": "/index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0c10",
