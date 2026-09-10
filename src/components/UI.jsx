@@ -1,4 +1,20 @@
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef, Children } from 'react';
+
+// ─── See More ──────────────────────────────────────────────────
+export function SeeMore({ children, initial = 6 }) {
+  const [expanded, setExpanded] = useState(false);
+  const items = Children.toArray(children);
+  if (items.length <= initial) return <>{children}</>;
+  const hidden = items.length - initial;
+  return (
+    <>
+      {expanded ? items : items.slice(0, initial)}
+      <button className="btn btn-ghost btn-sm see-more-btn" onClick={() => setExpanded(e => !e)}>
+        {expanded ? 'Show less' : `See more (${hidden} more)`}
+      </button>
+    </>
+  );
+}
 
 // ─── Toast System ───────────────────────────────────────────────
 const ToastContext = createContext(null);

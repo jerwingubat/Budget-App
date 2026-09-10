@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
 import { useCollection } from '../hooks/useFirestore';
 import { fmt, fmtCompact, EXPENSE_COLORS, CATEGORY_COLORS } from '../utils';
-import { Tabs, EmptyState, ProgressBar } from '../components/UI';
+import { Tabs, EmptyState, ProgressBar, SeeMore } from '../components/UI';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -115,13 +115,15 @@ export default function Reports() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="category-legend">
-                {pieData.map(c => (
-                  <div key={c.name} className="legend-item">
-                    <span className="legend-dot" style={{ background: c.fill }} />
-                    <span className="legend-name">{c.name}</span>
-                    <span className="legend-val">{fmt(c.value)}</span>
-                  </div>
-                ))}
+                <SeeMore initial={5}>
+                  {pieData.map(c => (
+                    <div key={c.name} className="legend-item">
+                      <span className="legend-dot" style={{ background: c.fill }} />
+                      <span className="legend-name">{c.name}</span>
+                      <span className="legend-val">{fmt(c.value)}</span>
+                    </div>
+                  ))}
+                </SeeMore>
               </div>
             </div>
           )}
@@ -133,19 +135,21 @@ export default function Reports() {
             <EmptyState icon="▲" message="No debts to show" />
           ) : (
             <div className="debt-progress-list">
-              {debts.map(d => {
-                const paid = (d.original || 0) - (d.balance || 0);
-                const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-                return (
-                  <div key={d.id} className="debt-progress-item">
-                    <div className="debt-progress-head">
-                      <span>{d.name}</span>
-                      <span className="text-dim">{fmt(d.balance)} left</span>
+              <SeeMore initial={5}>
+                {debts.map(d => {
+                  const paid = (d.original || 0) - (d.balance || 0);
+                  const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                  return (
+                    <div key={d.id} className="debt-progress-item">
+                      <div className="debt-progress-head">
+                        <span>{d.name}</span>
+                        <span className="text-dim">{fmt(d.balance)} left</span>
+                      </div>
+                      <ProgressBar percent={pct} size="small" />
                     </div>
-                    <ProgressBar percent={pct} size="small" />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </SeeMore>
             </div>
           )}
         </div>

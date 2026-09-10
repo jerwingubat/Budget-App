@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useCollection } from '../hooks/useFirestore';
 import { fmt, today } from '../utils';
-import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs } from '../components/UI';
+import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs, SeeMore } from '../components/UI';
 
 export default function Debts() {
   const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
@@ -409,47 +409,49 @@ export default function Debts() {
                 <span className="debt-group-total">{fmt(g.subtotal)}</span>
               </div>
               <div className="debts-grid">
-                {g.list.map(d => {
-                  const paid = (d.original || 0) - (d.balance || 0);
-                  const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-                  const isSel = selected.has(d.id);
-                  return (
-                    <div
-                      key={d.id}
-                      className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
-                      onClick={selecting ? () => toggleSelect(d.id) : undefined}
-                    >
-                      {selecting && (
-                        <div className={`debt-select-check ${isSel ? 'checked' : ''}`}>
-                          {isSel ? '✓' : ''}
+                <SeeMore initial={3}>
+                  {g.list.map(d => {
+                    const paid = (d.original || 0) - (d.balance || 0);
+                    const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                    const isSel = selected.has(d.id);
+                    return (
+                      <div
+                        key={d.id}
+                        className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
+                        onClick={selecting ? () => toggleSelect(d.id) : undefined}
+                      >
+                        {selecting && (
+                          <div className={`debt-select-check ${isSel ? 'checked' : ''}`}>
+                            {isSel ? '✓' : ''}
+                          </div>
+                        )}
+                        <div className="debt-card-head">
+                          <h4>{d.name}</h4>
+                          <span className="debt-rate">{d.rate}% APR</span>
                         </div>
-                      )}
-                      <div className="debt-card-head">
-                        <h4>{d.name}</h4>
-                        <span className="debt-rate">{d.rate}% APR</span>
-                      </div>
-                      <div className="debt-balance">{fmt(d.balance)}</div>
-                      <ProgressBar percent={pct} size="small" />
-                      <div className="debt-category-badge">
-                        <span className="debt-cat-icon">👤</span> {g.person}
-                      </div>
-                      <div className="debt-card-body">
-                        <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
-                        <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
-                        <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
-                        <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
-                      </div>
-                      {!selecting && (
-                        <div className="card-actions">
-                          <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
-                          <button className="btn-icon" title="Move to category" onClick={() => setMoveModal(d)}>⇄</button>
-                          <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
-                          <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
+                        <div className="debt-balance">{fmt(d.balance)}</div>
+                        <ProgressBar percent={pct} size="small" />
+                        <div className="debt-category-badge">
+                          <span className="debt-cat-icon">👤</span> {g.person}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        <div className="debt-card-body">
+                          <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+                          <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+                          <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+                          <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+                        </div>
+                        {!selecting && (
+                          <div className="card-actions">
+                            <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
+                            <button className="btn-icon" title="Move to category" onClick={() => setMoveModal(d)}>⇄</button>
+                            <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
+                            <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </SeeMore>
               </div>
             </div>
           ))}
@@ -466,19 +468,21 @@ export default function Debts() {
             <table className="data-table">
               <thead><tr><th>Date</th><th>Debt</th><th>Amount</th><th>Actions</th></tr></thead>
               <tbody>
-                {sortedPayments.map(p => {
-                  const debt = debts.find(d => d.id === p.debtId);
-                  return (
-                    <tr key={p.id}>
-                      <td className="td-date">{p.date}</td>
-                      <td><span className="cat-badge">{debt?.name || 'Unknown'}</span></td>
-                      <td className="tx-amount income">{fmt(p.amount)}</td>
-                      <td className="td-actions">
-                        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => handleDeletePayment(p)}>✕</button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                <SeeMore initial={8}>
+                  {sortedPayments.map(p => {
+                    const debt = debts.find(d => d.id === p.debtId);
+                    return (
+                      <tr key={p.id}>
+                        <td className="td-date">{p.date}</td>
+                        <td><span className="cat-badge">{debt?.name || 'Unknown'}</span></td>
+                        <td className="tx-amount income">{fmt(p.amount)}</td>
+                        <td className="td-actions">
+                          <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => handleDeletePayment(p)}>✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </SeeMore>
               </tbody>
             </table>
           </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useCollection } from '../hooks/useFirestore';
 import { fmt, fmtCompact, currentMonth, getMonthName, percentChange, CATEGORY_COLORS, EXPENSE_COLORS } from '../utils';
-import { ProgressBar, SkeletonCard, EmptyState, FAB } from '../components/UI';
+import { ProgressBar, SkeletonCard, EmptyState, FAB, SeeMore } from '../components/UI';
 
 function TrendBadge({ value }) {
   if (value === 0) return null;
@@ -149,13 +149,15 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="category-legend">
-                {categoryData.map(c => (
-                  <div key={c.name} className="legend-item">
-                    <span className="legend-dot" style={{ background: c.fill }} />
-                    <span className="legend-name">{c.name}</span>
-                    <span className="legend-val">{fmt(c.value)}</span>
-                  </div>
-                ))}
+                <SeeMore initial={5}>
+                  {categoryData.map(c => (
+                    <div key={c.name} className="legend-item">
+                      <span className="legend-dot" style={{ background: c.fill }} />
+                      <span className="legend-name">{c.name}</span>
+                      <span className="legend-val">{fmt(c.value)}</span>
+                    </div>
+                  ))}
+                </SeeMore>
               </div>
             </div>
           )}

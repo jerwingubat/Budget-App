@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useCollection } from '../hooks/useFirestore';
 import { fmt, fmtCompact, today, ordinal } from '../utils';
-import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable } from '../components/UI';
+import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, SeeMore } from '../components/UI';
 
 export default function CreditCards() {
   const { items: cards, add: addCard, update: updateCard, remove: removeCard, loading } = useCollection('creditCards');
@@ -147,22 +147,24 @@ export default function CreditCards() {
                 <tr><th>Date</th><th>Card</th><th>Description</th><th>Amount</th><th>Actions</th></tr>
               </thead>
               <tbody>
-                {sortedTxs.map(t => {
-                  const card = cards.find(c => c.id === t.cardId);
-                  return (
-                    <tr key={t.id}>
-                      <td className="td-date">{t.date}</td>
-                      <td><span className="cat-badge">{card?.name || 'Unknown'}</span></td>
-                      <td>{t.description}</td>
-                      <td className={`tx-amount ${t.type === 'payment' ? 'income' : 'expense'}`}>
-                        {t.type === 'payment' ? '-' : '+'}{fmt(t.amount)}
-                      </td>
-                      <td className="td-actions">
-                        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => handleDeleteTx(t)}>✕</button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                <SeeMore initial={8}>
+                  {sortedTxs.map(t => {
+                    const card = cards.find(c => c.id === t.cardId);
+                    return (
+                      <tr key={t.id}>
+                        <td className="td-date">{t.date}</td>
+                        <td><span className="cat-badge">{card?.name || 'Unknown'}</span></td>
+                        <td>{t.description}</td>
+                        <td className={`tx-amount ${t.type === 'payment' ? 'income' : 'expense'}`}>
+                          {t.type === 'payment' ? '-' : '+'}{fmt(t.amount)}
+                        </td>
+                        <td className="td-actions">
+                          <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => handleDeleteTx(t)}>✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </SeeMore>
               </tbody>
             </table>
           </div>
