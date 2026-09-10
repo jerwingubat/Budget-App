@@ -13,12 +13,22 @@ export default function Debts() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [customAmount, setCustomAmount] = useState('');
   const [customStrategy, setCustomStrategy] = useState('snowball');
+  const [filter, setFilter] = useState('all');
 
   const stats = useMemo(() => ({
     total: debts.reduce((s, d) => s + (d.balance || 0), 0),
     monthly: debts.reduce((s, d) => s + (d.minPayment || 0), 0),
     interest: debts.reduce((s, d) => s + ((d.balance || 0) * (d.rate || 0) / 100 / 12), 0),
   }), [debts]);
+
+  const paidCount = debts.filter(d => (d.balance || 0) <= 0).length;
+  const unpaidCount = debts.length - paidCount;
+
+  const visibleDebts = useMemo(() => {
+    if (filter === 'paid') return debts.filter(d => (d.balance || 0) <= 0);
+    if (filter === 'unpaid') return debts.filter(d => (d.balance || 0) > 0);
+    return debts;
+  }, [debts, filter]);
 
   const customAlloc = useMemo(() => {
     if (!customAmount || isNaN(parseFloat(customAmount)) || parseFloat(customAmount) <= 0) return null;
@@ -219,11 +229,31 @@ export default function Debts() {
         )}
       </div>
 
+      <div className="toolbar">
+        <Tabs
+          tabs={[
+            { value: 'all', label: `All (${debts.length})` },
+            { value: 'unpaid', label: `Unpaid (${unpaidCount})` },
+            { value: 'paid', label: `Paid (${paidCount})` },
+          ]}
+          active={filter}
+          onChange={setFilter}
+        />
+      </div>
+
       {debts.length === 0 ? (
         <div className="panel"><EmptyState icon="▲" message="No debts tracked. Add one to start." /></div>
+      ) : visibleDebts.length === 0 ? (
+        <div className="panel">
+          <EmptyState
+            icon="✓"
+            message={filter === 'paid' ? 'No paid debts yet' : 'All debts are paid off'}
+            action={filter !== 'all' ? <button className="btn btn-ghost btn-sm" onClick={() => setFilter('all')}>Show all debts</button> : null}
+          />
+        </div>
       ) : (
         <div className="debts-grid">
-          {debts.map(d => {
+          {visibleDebts.map(d => {
             const paid = (d.original || 0) - (d.balance || 0);
             const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
             return (
