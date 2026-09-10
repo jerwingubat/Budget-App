@@ -68,7 +68,8 @@ export default function Debts() {
     });
     const allocations = [];
     for (const d of order) {
-      if (amount <= 0 || d.balance <= 0) break;
+      if (amount <= 0) break;
+      if ((d.balance || 0) <= 0) continue;
       const pay = Math.min(amount, d.balance);
       allocations.push({ debt: d, amount: pay });
       amount -= pay;
