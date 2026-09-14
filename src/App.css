@@ -273,6 +273,69 @@ a { color: var(--primary); text-decoration: none; }
 .fab:hover { background: var(--primary-hover); transform: scale(1.05); box-shadow: 0 6px 24px rgba(59, 130, 246, .5); }
 .fab-icon { font-size: 1.1rem; }
 
+/* ─── Page Actions ─────────────────────────────────────── */
+.page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ─── Scan Receipt Modal ───────────────────────────────── */
+.scan-intro { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 20px; line-height: 1.6; }
+.scan-pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.scan-pick-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 36px 16px; border-radius: var(--radius); cursor: pointer;
+  background: var(--bg-elevated); border: 1px dashed var(--text-muted);
+  transition: all var(--transition); font-family: inherit; color: var(--text);
+}
+.scan-pick-card:hover { border-color: var(--primary); background: var(--primary-bg); }
+.scan-pick-icon { font-size: 1.8rem; }
+.scan-pick-label { font-size: 0.88rem; font-weight: 600; }
+.scan-dropzone {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 20px; border: 1px dashed var(--border); border-radius: var(--radius);
+  color: var(--text-muted); font-size: 0.82rem; transition: all var(--transition);
+}
+.scan-dropzone.scan-dropover { border-color: var(--primary); color: var(--primary); background: var(--primary-bg); }
+.scan-drop-icon { font-size: 1.2rem; }
+.scan-note { font-size: 0.72rem; color: var(--text-muted); margin-top: 12px; }
+
+.scan-preview {
+  width: 100%; max-height: 240px; object-fit: contain;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-elevated); display: block; margin-bottom: 16px;
+}
+.scan-preview-sm { max-height: 120px; width: 96px; margin: 0; border-radius: var(--radius-sm); flex-shrink: 0; }
+.scan-progress { margin-bottom: 16px; }
+.scan-status { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text); margin-top: 10px; font-weight: 500; }
+.scan-substatus { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+
+.scan-review-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+.scan-review-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.scan-detected { font-size: 0.88rem; font-weight: 600; color: var(--success); }
+.scan-warning { font-size: 0.78rem; color: var(--warning); }
+.input-invalid { border-color: var(--danger) !important; }
+
+.scan-extracted { margin: 16px 0 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.scan-extracted-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); font-weight: 600; margin-bottom: 6px; }
+.scan-detail-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+.scan-detail-row:last-child { border-bottom: none; }
+.scan-detail-name { color: var(--text); min-width: 0; overflow-wrap: break-word; }
+.scan-qty { color: var(--text-muted); font-size: 0.75rem; margin-left: 4px; }
+.scan-detail-price { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scan-metadata { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+
+.scan-raw { margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elevated); }
+.scan-raw summary { padding: 10px 14px; font-size: 0.82rem; font-weight: 500; color: var(--text-dim); cursor: pointer; user-select: none; }
+.scan-raw summary:hover { color: var(--text); }
+.scan-raw[open] summary { border-bottom: 1px solid var(--border); }
+.scan-hint-sm { font-size: 0.72rem; color: var(--text-muted); padding: 8px 14px 0; }
+.raw-text-editor {
+  width: 100%; min-height: 120px; resize: vertical;
+  padding: 12px 14px; margin-top: 8px; border: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--bg-card); color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; line-height: 1.5;
+  outline: none;
+}
+.scan-save-row { display: flex; justify-content: flex-end; gap: 8px; }
+
 /* ─── Modal ─────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 200;
@@ -676,6 +739,10 @@ a { color: var(--primary); text-decoration: none; }
   .modal-header { padding: 16px 20px 0; }
   .modal-body { padding: 16px 20px calc(20px + env(safe-area-inset-bottom)); }
   .modal-header h2 { font-size: 1rem; }
+
+  .page-actions .btn { flex: 1; }
+  .scan-pick-grid { grid-template-columns: 1fr; }
+  .scan-pick-card { padding: 24px 16px; flex-direction: row; gap: 12px; }
 }
 
 @media (max-width: 400px) {

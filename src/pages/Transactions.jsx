@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useCollection, useCategories } from '../hooks/useFirestore';
 import { fmt, today } from '../utils';
 import { Modal, FormField, FormRow, EmptyState, SearchInput, Tabs, FAB, useKbdShortcut, useToast, SkeletonTable } from '../components/UI';
+import ScanReceiptModal from '../components/ScanReceiptModal';
 
 const PAGE_SIZE = 15;
 
@@ -19,6 +20,7 @@ export default function Transactions() {
   const [sortDir, setSortDir] = useState('desc');
   const [page, setPage] = useState(1);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   const openAdd = useCallback(() => setModal({}), []);
   useKbdShortcut('mod+k', openAdd);
@@ -98,7 +100,10 @@ export default function Transactions() {
           <h1>Transactions</h1>
           <p className="page-sub">{filtered.length} transaction{filtered.length !== 1 ? 's' : ''}</p>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>+ Add Transaction</button>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={openAdd}>+ Add Transaction</button>
+          <button className="btn btn-secondary" onClick={() => setScanOpen(true)}>📷 Scan Receipt</button>
+        </div>
       </div>
 
       <div className="toolbar">
@@ -170,6 +175,14 @@ export default function Transactions() {
       )}
 
       <FAB onClick={openAdd} icon="+" label="Add" />
+
+      {scanOpen && (
+        <ScanReceiptModal
+          onClose={() => setScanOpen(false)}
+          categories={categories}
+          addTransaction={add}
+        />
+      )}
 
       {modal !== null && (
         <Modal title={modal.id ? 'Edit Transaction' : 'New Transaction'} onClose={() => setModal(null)}>
