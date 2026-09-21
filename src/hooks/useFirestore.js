@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import {
-  addItem, updateItem, deleteItem, subscribeToCollection
+  addItem, updateItem, deleteItem, subscribeToCollection, subscribeToSharesFor
 } from '../services/firestore';
 
 const DEFAULT_CATEGORIES = [
@@ -31,6 +31,86 @@ export function useCollection(collectionName) {
   const remove = (id) => deleteItem(user.uid, collectionName, id);
 
   return { items, loading, add, update, remove };
+}
+
+// Debts another user has shared with the current user (read-only).
+export function useSharedDebts() {
+  const { user } = useAuth();
+  const [shares, setShares] = useState([]);
+  const [debtsByOwner, setDebtsByOwner] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!user?.email) {
+      setLoading(false);
+      setShares([]);
+      setDebtsByOwner({});
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    let disposed = false;
+    const subs = new Map();
+
+    const cleanupOwner = (ownerUid) => {
+      const unsub = subs.get(ownerUid);
+      if (unsub) { unsub(); subs.delete(ownerUid); }
+    };
+
+    const unsubShares = subscribeToSharesFor(
+      user.email,
+      (incoming) => {
+        if (disposed) return;
+        setShares(incoming);
+        const desired = new Set(incoming.map(s => s.ownerUid));
+        for (const owner of [...subs.keys()]) {
+          if (!desired.has(owner)) {
+            cleanupOwner(owner);
+            setDebtsByOwner(prev => {
+              if (!(owner in prev)) return prev;
+              const next = { ...prev };
+              delete next[owner];
+              return next;
+            });
+          }
+        }
+        desired.forEach((owner) => {
+          if (!subs.has(owner)) {
+            const unsub = subscribeToCollection(owner, 'debts', (data) => {
+              if (disposed) return;
+              setDebtsByOwner(prev => {
+                if (prev[owner] === data) return prev;
+                return { ...prev, [owner]: data };
+              });
+              setLoading(false);
+            }, () => {
+              if (disposed) return;
+              setError('Could not load shared debts. Make sure sharing rules are deployed (see README).');
+              setLoading(false);
+            });
+            subs.set(owner, unsub);
+          }
+        });
+        if (incoming.length === 0) setLoading(false);
+      },
+      () => {
+        if (disposed) return;
+        setError('Could not load shares. Make sure sharing rules are deployed (see README).');
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      disposed = true;
+      unsubShares();
+      subs.forEach(u => u());
+      subs.clear();
+    };
+  }, [user]);
+
+  const debts = useMemo(() => Object.values(debtsByOwner).flat(), [debtsByOwner]);
+  return { shares, debtsByOwner, debts, loading, error };
 }
 
 export function useCategories() {

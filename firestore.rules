@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ─── User's private collections ─────────────────────────
+    match /users/{uid}/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ─── Debt sharing ───────────────────────────────────────
+    // Owners manage shares. A shared email can read the share
+    // document carrying their own email (used to discover which
+    // user's debts were granted, via a collection-group query).
+    match /users/{uid}/shares/{email} {
+      allow read, create, update, delete: if isOwner(uid);
+      allow get, list: if signedIn() && request.auth.token.email == email;
+    }
+
+    // Collection-group queries against any 'shares' subcollection.
+    // The path-segment email must equal the requester's email so a
+    // share document can never be used to look up another user.
+    match /{path=**}/shares/{email} {
+      allow get, list: if signedIn() && request.auth.token.email == email;
+    }
+
+    function shareCategoryAllows(uid, debtCategory) {
+      let share = get(/databases/$(database)/documents/users/$(uid)/shares/$(request.auth.token.email));
+      return share.exists
+        && (share.data.category == null
+            || share.data.category == ''
+            || share.data.category == debtCategory);
+    }
+
+    // Read access to debts for users whose email has been shared.
+    // A scoped share only exposes debts in that category; list
+    // queries are filtered document-by-document by the rules engine.
+    match /users/{uid}/debts/{debtId} {
+      allow get, list: if isOwner(uid)
+        || (signedIn()
+            && request.auth.token.email != null
+            && shareCategoryAllows(uid, resource.data.category));
+    }
+  }
+}

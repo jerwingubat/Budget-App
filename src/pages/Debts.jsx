@@ -1,11 +1,14 @@
-import { useState, useMemo } from 'react';
-import { useCollection } from '../hooks/useFirestore';
+import { Fragment, useState, useMemo } from 'react';
+import { useCollection, useSharedDebts } from '../hooks/useFirestore';
 import { fmt, today } from '../utils';
 import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs, SeeMore } from '../components/UI';
+import ShareDebtsModal from '../components/ShareDebtsModal';
 
 export default function Debts() {
   const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
   const { items: payments, add: addPayment, remove: removePayment } = useCollection('payments');
+  const { items: shares } = useCollection('shares');
+  const { shares: incomingShares, debtsByOwner, loading: sharedLoading, error: sharedError } = useSharedDebts();
   const { addToast } = useToast();
   const [debtModal, setDebtModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
@@ -19,6 +22,8 @@ export default function Debts() {
   const [customStrategy, setCustomStrategy] = useState('snowball');
   const [filter, setFilter] = useState('all');
   const [filterCat, setFilterCat] = useState('all');
+  const [view, setView] = useState('mine');
+  const [shareModal, setShareModal] = useState(false);
 
   const categoryDebts = useMemo(() => {
     if (filterCat === 'all') return debts;
@@ -230,11 +235,98 @@ export default function Debts() {
       <div className="page-header">
         <div>
           <h1>Debt Tracker</h1>
-          <p className="page-sub">{debts.length} debt{debts.length !== 1 ? 's' : ''}</p>
+          <p className="page-sub">
+            {view === 'shared'
+              ? `Debts shared with you (${incomingShares.length} source${incomingShares.length !== 1 ? 's' : ''})`
+              : `${debts.length} debt${debts.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setDebtModal({})}>+ Add Debt</button>
+        {view === 'mine' && (
+          <button className="btn btn-primary" onClick={() => setDebtModal({})}>+ Add Debt</button>
+        )}
       </div>
 
+      <div className="toolbar toolbar-inline">
+        {incomingShares.length > 0 && (
+          <Tabs
+            tabs={[
+              { value: 'mine', label: 'My Debts' },
+              { value: 'shared', label: `Shared with me (${incomingShares.length})` },
+            ]}
+            active={view}
+            onChange={setView}
+          />
+        )}
+        <button className="btn btn-secondary btn-sm" onClick={() => setShareModal(true)}>
+          🔗 Share Debt List
+        </button>
+      </div>
+
+      {view === 'shared' ? (
+        <div>
+          {sharedError && (
+            <div className="share-warn">
+              {sharedError} Once deployed, open the <strong>Shared with me</strong> tab again to reload.
+            </div>
+          )}
+          {!sharedError && sharedLoading && <SkeletonTable rows={2} cols={3} />}
+          {!sharedError && !sharedLoading && (
+            <>
+              {incomingShares.map(s => {
+                const ownerDebts = (debtsByOwner[s.ownerUid] || []).filter(d =>
+                  s.category ? (d.category || '').trim() === s.category : true
+                );
+                if (ownerDebts.length === 0) return null;
+                const subtotal = ownerDebts.reduce((sum, d) => sum + (d.balance || 0), 0);
+                return (
+                  <div key={s.id} className="panel">
+                    <div className="panel-head">
+                      <div>
+                        <h3>{s.ownerName || s.ownerEmail}</h3>
+                        <span className="share-scope">
+                          {s.category ? `Category: ${s.category}` : 'All debts'}
+                          {' · '}{ownerDebts.length} debt{ownerDebts.length !== 1 ? 's' : ''}
+                          {' · '}{fmt(subtotal)}
+                        </span>
+                      </div>
+                      <span className="badge badge-share">Read only</span>
+                    </div>
+                    <div className="debts-grid">
+                      {ownerDebts.map(d => {
+                        const paid = (d.original || 0) - (d.balance || 0);
+                        const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                        return (
+                          <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
+                            <div className="debt-card-head">
+                              <h4>{d.name}</h4>
+                              <span className="debt-rate">{d.rate}% APR</span>
+                            </div>
+                            <div className="debt-balance">{fmt(d.balance)}</div>
+                            <ProgressBar percent={pct} size="small" />
+                            <div className="debt-category-badge">
+                              <span className="debt-cat-icon">👤</span> {(d.category || '').trim() || 'Other'}
+                            </div>
+                            <div className="debt-card-body">
+                              <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+                              <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+                              <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+                              <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+              {incomingShares.length === 0 && !sharedError && (
+                <div className="panel"><EmptyState icon="🔗" message="No one has shared debts with you yet." /></div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <Fragment>
       <div className="kpi-grid kpi-3">
         <div className="kpi-card kpi-danger">
           <div className="kpi-header"><span className="kpi-icon" style={{ background: '#ef444418', color: '#ef4444' }}>▲</span></div>
@@ -487,6 +579,17 @@ export default function Debts() {
             </table>
           </div>
         </div>
+      )}
+
+      </Fragment>
+      )}
+
+      {shareModal && (
+        <ShareDebtsModal
+          shares={shares}
+          categories={personNames}
+          onClose={() => setShareModal(false)}
+        />
       )}
 
       {debtModal !== null && (

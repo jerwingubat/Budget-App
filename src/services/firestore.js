@@ -1,6 +1,6 @@
 import {
-  collection, addDoc, updateDoc, deleteDoc,
-  doc, query, orderBy, getDocs, onSnapshot, serverTimestamp
+  collection, collectionGroup, addDoc, updateDoc, deleteDoc,
+  doc, query, orderBy, where, getDocs, onSnapshot, serverTimestamp, setDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -33,12 +33,12 @@ export async function deleteItem(userId, collectionName, id) {
 }
 
 // Real-time subscription
-export function subscribeToCollection(userId, collectionName, callback) {
+export function subscribeToCollection(userId, collectionName, callback, onError = () => {}) {
   const q = query(userCol(userId, collectionName), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snapshot) => {
     const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     callback(items);
-  });
+  }, onError);
 }
 
 // One-time fetch
@@ -61,4 +61,35 @@ export async function saveCategories(userId, categories) {
       createdAt: serverTimestamp(),
     });
   });
+}
+
+// ─── Debt Sharing ──────────────────────────────────────────
+// Share access to debts: doc id is the lowercased email of the
+// recipient and carries the optional category scope ('' = all).
+export async function setShare(userId, email, data) {
+  const normalized = email.trim().toLowerCase();
+  await setDoc(doc(db, 'users', userId, 'shares', normalized), {
+    ...data,
+    email: normalized,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function deleteShare(userId, email) {
+  await deleteDoc(doc(db, 'users', userId, 'shares', email.trim().toLowerCase()));
+}
+
+// Finds shares granted TO this email from any user, ready for a
+// collection-group query.
+export function subscribeToSharesFor(email, callback, onError = () => {}) {
+  const q = query(collectionGroup(db, 'shares'), where('email', '==', email.trim().toLowerCase()));
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(d => ({
+      id: d.id,
+      ownerUid: d.ref.parent.parent.id,
+      ...d.data(),
+    }));
+    callback(items);
+  }, onError);
 }

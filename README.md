@@ -85,6 +85,25 @@ Monitor debts and plan your repayments.
 - **Payment History** – All logged payments are listed below the debts.
 - **KPIs** – Total debt, minimum monthly payments, and estimated monthly interest are shown at the top.
 
+### Sharing Your Debt List
+
+You can let another person **view** your debts with their own BudgetFlow account.
+
+- On the **Debts** page, click **🔗 Share Debt List**.
+- Enter their email and pick a scope: **All categories** or a specific person/lender category.
+- That person signs in with that email and opens the **Debts** page → the **Shared with me** tab shows a read-only copy. They can switch back to **My Debts** anytime.
+- Click **✕** next to an email to revoke access. Access is read-only: shared visitors cannot edit or pay off your debts.
+
+Access is enforced by **Firestore security rules**. If you haven't deployed them yet:
+
+1. Install the Firebase CLI: `npm i -g firebase-tools`
+2. Run `firebase login` and pick your project (e.g. `firebase use budget-tracker-6e359`)
+3. Deploy the rules: `firebase deploy --only firestore:rules`
+
+The rules live in **`firestore.rules`** (config in **`firebase.json`**). Until they're deployed, the app shows a warning instead of shared debts.
+
+> Emails are stored in lowercase. A share only works when the recipient signs in with the **exact same email** you entered.
+
 ---
 
 ## Reports
