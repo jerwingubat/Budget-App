@@ -586,11 +586,22 @@ a { color: var(--primary); text-decoration: none; }
 .badge-share { background: var(--primary-bg); color: var(--primary); }
 .share-scope { display: block; font-size: 0.78rem; color: var(--text-dim); font-weight: 400; margin-top: 2px; }
 .share-warn {
-  padding: 12px 16px; margin-bottom: 20px; border-radius: var(--radius-sm);
+  padding: 16px; margin-bottom: 20px; border-radius: var(--radius-sm);
   background: var(--warning-bg); color: var(--warning); font-size: 0.85rem;
   border: 1px solid var(--warning);
 }
-.share-warn strong { color: var(--text); }
+.share-warn-title { font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.share-warn-detail {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 0.78rem; color: var(--warning); word-break: break-word; margin-bottom: 12px;
+}
+.share-warn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.share-warn-hint { font-size: 0.78rem; color: var(--text-dim); line-height: 1.6; }
+.share-warn-hint code {
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 0.76rem; background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+}
 
 /* ─── Reports ───────────────────────────────────────────── */
 .reports-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

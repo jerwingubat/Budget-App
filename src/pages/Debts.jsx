@@ -8,7 +8,8 @@ export default function Debts() {
   const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
   const { items: payments, add: addPayment, remove: removePayment } = useCollection('payments');
   const { items: shares } = useCollection('shares');
-  const { shares: incomingShares, debtsByOwner, loading: sharedLoading, error: sharedError } = useSharedDebts();
+  const [shareReload, setShareReload] = useState(0);
+  const { shares: incomingShares, debtsByOwner, loading: sharedLoading, error: sharedError } = useSharedDebts(shareReload);
   const { addToast } = useToast();
   const [debtModal, setDebtModal] = useState(null);
   const [payModal, setPayModal] = useState(null);
@@ -24,6 +25,8 @@ export default function Debts() {
   const [filterCat, setFilterCat] = useState('all');
   const [view, setView] = useState('mine');
   const [shareModal, setShareModal] = useState(false);
+
+  const rulesConsoleUrl = `https://console.firebase.google.com/project/${import.meta.env.VITE_FB_PROJECTID}/firestore/rules`;
 
   const categoryDebts = useMemo(() => {
     if (filterCat === 'all') return debts;
@@ -266,7 +269,22 @@ export default function Debts() {
         <div>
           {sharedError && (
             <div className="share-warn">
-              {sharedError} Once deployed, open the <strong>Shared with me</strong> tab again to reload.
+              <div className="share-warn-title">Shared debts unavailable</div>
+              <div className="share-warn-detail">{sharedError}</div>
+              <div className="share-warn-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => setShareReload(k => k + 1)}>Retry</button>
+                <a className="btn btn-ghost btn-sm" href={rulesConsoleUrl} target="_blank" rel="noreferrer">Open Firestore rules</a>
+              </div>
+              <div className="share-warn-hint">
+                <strong>If it shows <code>failed-precondition</code> or “requires an index”:</strong> the collection-group
+                index on <code>shares.email</code> is missing. Run <code>firebase deploy --only firestore:indexes</code>{' '}
+                (config is in <code>firestore.indexes.json</code>).
+                <br />
+                <strong>If it shows <code>permission-denied</code>:</strong> the rules in project{' '}
+                <strong>{import.meta.env.VITE_FB_PROJECTID}</strong> don&#39;t include the collection-group
+                &quot;shares&quot; rule — run <code>firebase deploy --only firestore:rules</code>. Then press{' '}
+                <strong>Retry</strong> — a subscription won&#39;t recover on its own.
+              </div>
             </div>
           )}
           {!sharedError && sharedLoading && <SkeletonTable rows={2} cols={3} />}

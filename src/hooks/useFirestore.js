@@ -34,7 +34,7 @@ export function useCollection(collectionName) {
 }
 
 // Debts another user has shared with the current user (read-only).
-export function useSharedDebts() {
+export function useSharedDebts(retry = 0) {
   const { user } = useAuth();
   const [shares, setShares] = useState([]);
   const [debtsByOwner, setDebtsByOwner] = useState({});
@@ -52,6 +52,12 @@ export function useSharedDebts() {
     setError(null);
     let disposed = false;
     const subs = new Map();
+
+    const describeError = (err, fallback) => {
+      const code = err?.code || err?.name || 'unknown';
+      const detail = (err?.message || String(err)).split('\n')[0];
+      return `${fallback} (${code}${detail ? ' — ' + detail : ''})`;
+    };
 
     const cleanupOwner = (ownerUid) => {
       const unsub = subs.get(ownerUid);
@@ -84,9 +90,9 @@ export function useSharedDebts() {
                 return { ...prev, [owner]: data };
               });
               setLoading(false);
-            }, () => {
+            }, (err) => {
               if (disposed) return;
-              setError('Could not load shared debts. Make sure sharing rules are deployed (see README).');
+              setError(describeError(err, 'Could not load shared debts. Make sure sharing rules are deployed (see README).'));
               setLoading(false);
             });
             subs.set(owner, unsub);
@@ -94,9 +100,9 @@ export function useSharedDebts() {
         });
         if (incoming.length === 0) setLoading(false);
       },
-      () => {
+      (err) => {
         if (disposed) return;
-        setError('Could not load shares. Make sure sharing rules are deployed (see README).');
+        setError(describeError(err, 'Could not check for shared debts. Make sure sharing rules are deployed (see README).'));
         setLoading(false);
       }
     );
@@ -107,7 +113,7 @@ export function useSharedDebts() {
       subs.forEach(u => u());
       subs.clear();
     };
-  }, [user]);
+  }, [user, retry]);
 
   const debts = useMemo(() => Object.values(debtsByOwner).flat(), [debtsByOwner]);
   return { shares, debtsByOwner, debts, loading, error };
