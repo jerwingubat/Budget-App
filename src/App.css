@@ -529,6 +529,39 @@ a { color: var(--primary); text-decoration: none; }
 .debt-stat span:first-child { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .debt-stat span:last-child { font-size: 0.85rem; font-weight: 600; margin-top: 2px; }
 .pay-debt-name { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+
+/* ─── Debts List View ───────────────────────────────────── */
+.debt-list { display: flex; flex-direction: column; gap: 10px; }
+.debt-row {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 16px; transition: border-color var(--transition);
+}
+.debt-row:hover { border-color: var(--text-muted); }
+.debt-row-paid { opacity: 0.6; }
+.debt-row-paid .debt-row-balance { color: var(--success); }
+.debt-row-cat {
+  flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary-bg); font-size: 1rem; font-weight: 600; color: var(--primary);
+  overflow: hidden; white-space: nowrap;
+}
+.debt-row-name { flex: 1; min-width: 0; }
+.debt-row-name h4 { font-size: 0.95rem; font-weight: 600; }
+.debt-row-sub { font-size: 0.78rem; color: var(--text-dim); }
+.debt-row-min { flex-shrink: 0; font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; min-width: 90px; }
+.debt-row-progress { flex-shrink: 0; width: 160px; }
+.debt-row-balance { flex-shrink: 0; font-size: 1.05rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 110px; }
+.debt-row-actions { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+@media (max-width: 900px) {
+  .debt-row-progress { display: none; }
+}
+@media (max-width: 640px) {
+  .debt-row { flex-wrap: wrap; row-gap: 8px; }
+  .debt-row-min { display: none; }
+  .debt-row-balance { margin-left: auto; }
+}
+
 .debt-progress-list { display: flex; flex-direction: column; gap: 16px; }
 .debt-progress-head { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px; }
 

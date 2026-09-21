@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo } from 'react';
+import { Fragment, useState, useMemo, useEffect } from 'react';
 import { useCollection, useSharedDebts } from '../hooks/useFirestore';
 import { fmt, today } from '../utils';
 import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs, SeeMore } from '../components/UI';
@@ -25,6 +25,9 @@ export default function Debts() {
   const [filterCat, setFilterCat] = useState('all');
   const [view, setView] = useState('mine');
   const [shareModal, setShareModal] = useState(false);
+  const [layout, setLayout] = useState(() => localStorage.getItem('debtsLayout') || 'grid');
+
+  useEffect(() => { localStorage.setItem('debtsLayout', layout); }, [layout]);
 
   const rulesConsoleUrl = `https://console.firebase.google.com/project/${import.meta.env.VITE_FB_PROJECTID}/firestore/rules`;
 
@@ -224,6 +227,69 @@ export default function Debts() {
 
   const sortedPayments = useMemo(() => [...payments].sort((a, b) => (b.date || '').localeCompare(a.date || '')), [payments]);
 
+  const renderDebt = (d, person, { selecting = false, isSel = false, shared = false } = {}) => {
+    const paid = (d.original || 0) - (d.balance || 0);
+    const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+    const cat = person || 'Other';
+    const meta = (
+      <>
+        <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+        <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+        <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+        <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+      </>
+    );
+    const actions = !shared && !selecting && (
+      <div className={layout === 'grid' ? 'card-actions' : 'debt-row-actions'}>
+        <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
+        <button className="btn-icon" title="Move to category" onClick={() => setMoveModal(d)}>⇄</button>
+        <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
+        <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
+      </div>
+    );
+    if (layout === 'list') {
+      return (
+        <div
+          key={d.id}
+          className={`debt-row ${pct >= 100 ? 'debt-row-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
+          onClick={selecting ? () => toggleSelect(d.id) : undefined}
+        >
+          <div className="debt-row-cat">{cat}</div>
+          <div className="debt-row-name">
+            <h4>{d.name}</h4>
+            <span className="debt-row-sub">{d.rate}% APR · Due {d.dueDate || '—'}</span>
+          </div>
+          <div className="debt-row-min">{fmt(d.minPayment)}/mo</div>
+          <div className="debt-row-progress"><ProgressBar percent={pct} size="small" /></div>
+          <div className="debt-row-balance">{fmt(d.balance)}</div>
+          {actions}
+        </div>
+      );
+    }
+    return (
+      <div
+        key={d.id}
+        className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
+        onClick={selecting ? () => toggleSelect(d.id) : undefined}
+      >
+        {selecting && (
+          <div className={`debt-select-check ${isSel ? 'checked' : ''}`}>{isSel ? '✓' : ''}</div>
+        )}
+        <div className="debt-card-head">
+          <h4>{d.name}</h4>
+          <span className="debt-rate">{d.rate}% APR</span>
+        </div>
+        <div className="debt-balance">{fmt(d.balance)}</div>
+        <ProgressBar percent={pct} size="small" />
+        <div className="debt-category-badge">
+          <span className="debt-cat-icon">👤</span> {cat}
+        </div>
+        <div className="debt-card-body">{meta}</div>
+        {actions}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div>
@@ -260,6 +326,13 @@ export default function Debts() {
             onChange={setView}
           />
         )}
+        <button
+          className={`btn ${layout === 'list' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+          onClick={() => setLayout(l => l === 'grid' ? 'list' : 'grid')}
+          title="Toggle between grid and list view"
+        >
+          {layout === 'grid' ? '☰ List view' : '▦ Grid view'}
+        </button>
         <button className="btn btn-secondary btn-sm" onClick={() => setShareModal(true)}>
           🔗 Share Debt List
         </button>
@@ -309,31 +382,9 @@ export default function Debts() {
                       </div>
                       <span className="badge badge-share">Read only</span>
                     </div>
-                    <div className="debts-grid">
+                    <div className={layout === 'grid' ? 'debts-grid' : 'debt-list'}>
                       <SeeMore initial={3}>
-                        {ownerDebts.map(d => {
-                          const paid = (d.original || 0) - (d.balance || 0);
-                          const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-                          return (
-                            <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
-                              <div className="debt-card-head">
-                                <h4>{d.name}</h4>
-                                <span className="debt-rate">{d.rate}% APR</span>
-                              </div>
-                              <div className="debt-balance">{fmt(d.balance)}</div>
-                              <ProgressBar percent={pct} size="small" />
-                              <div className="debt-category-badge">
-                                <span className="debt-cat-icon">👤</span> {(d.category || '').trim() || 'Other'}
-                              </div>
-                              <div className="debt-card-body">
-                                <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
-                                <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
-                                <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
-                                <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {ownerDebts.map(d => renderDebt(d, (d.category || '').trim() || 'Other', { shared: true }))}
                       </SeeMore>
                     </div>
                   </div>
@@ -520,49 +571,9 @@ export default function Debts() {
                 </div>
                 <span className="debt-group-total">{fmt(g.subtotal)}</span>
               </div>
-              <div className="debts-grid">
+              <div className={layout === 'grid' ? 'debts-grid' : 'debt-list'}>
                 <SeeMore initial={3}>
-                  {g.list.map(d => {
-                    const paid = (d.original || 0) - (d.balance || 0);
-                    const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-                    const isSel = selected.has(d.id);
-                    return (
-                      <div
-                        key={d.id}
-                        className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''} ${selecting ? 'debt-card-selectable' : ''} ${isSel ? 'debt-card-selected' : ''}`}
-                        onClick={selecting ? () => toggleSelect(d.id) : undefined}
-                      >
-                        {selecting && (
-                          <div className={`debt-select-check ${isSel ? 'checked' : ''}`}>
-                            {isSel ? '✓' : ''}
-                          </div>
-                        )}
-                        <div className="debt-card-head">
-                          <h4>{d.name}</h4>
-                          <span className="debt-rate">{d.rate}% APR</span>
-                        </div>
-                        <div className="debt-balance">{fmt(d.balance)}</div>
-                        <ProgressBar percent={pct} size="small" />
-                        <div className="debt-category-badge">
-                          <span className="debt-cat-icon">👤</span> {g.person}
-                        </div>
-                        <div className="debt-card-body">
-                          <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
-                          <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
-                          <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
-                          <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
-                        </div>
-                        {!selecting && (
-                          <div className="card-actions">
-                            <button className="btn btn-primary btn-sm" onClick={() => setQuickPay(d)}>Pay</button>
-                            <button className="btn-icon" title="Move to category" onClick={() => setMoveModal(d)}>⇄</button>
-                            <button className="btn-icon" title="Edit" onClick={() => setDebtModal(d)}>✎</button>
-                            <button className="btn-icon btn-icon-danger" title="Delete" onClick={() => setDeleteConfirm(d)}>✕</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {g.list.map(d => renderDebt(d, g.person, { selecting, isSel: selected.has(d.id), shared: false }))}
                 </SeeMore>
               </div>
             </div>
