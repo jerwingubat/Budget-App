@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import {
-  addItem, updateItem, deleteItem, subscribeToCollection, subscribeToSharesFor
+  addItem, updateItem, deleteItem, subscribeToCollection, subscribeToSharesFor, subscribeToSharedDebts
 } from '../services/firestore';
 
 const DEFAULT_CATEGORIES = [
@@ -51,7 +51,19 @@ export function useSharedDebts(retry = 0) {
     setLoading(true);
     setError(null);
     let disposed = false;
+    // Keyed by `${ownerUid}\u0001${category}` so each scoped share gets its
+    // own subscription whose query matches the security rules.
     const subs = new Map();
+    const ownerItems = new Map(); // ownerUid -> Map(category -> items[])
+
+    const emit = () => {
+      if (disposed) return;
+      const next = {};
+      for (const [owner, byCat] of ownerItems) {
+        next[owner] = [...byCat.values()].flat();
+      }
+      setDebtsByOwner(next);
+    };
 
     const describeError = (err, fallback) => {
       const code = err?.code || err?.name || 'unknown';
@@ -59,45 +71,45 @@ export function useSharedDebts(retry = 0) {
       return `${fallback} (${code}${detail ? ' — ' + detail : ''})`;
     };
 
-    const cleanupOwner = (ownerUid) => {
-      const unsub = subs.get(ownerUid);
-      if (unsub) { unsub(); subs.delete(ownerUid); }
-    };
+    const key = (ownerUid, category) => `${ownerUid}\u0001${category || ''}`;
 
     const unsubShares = subscribeToSharesFor(
       user.email,
       (incoming) => {
         if (disposed) return;
         setShares(incoming);
-        const desired = new Set(incoming.map(s => s.ownerUid));
-        for (const owner of [...subs.keys()]) {
-          if (!desired.has(owner)) {
-            cleanupOwner(owner);
-            setDebtsByOwner(prev => {
-              if (!(owner in prev)) return prev;
-              const next = { ...prev };
-              delete next[owner];
-              return next;
-            });
+        const desired = new Set(incoming.map(s => key(s.ownerUid, s.category)));
+        for (const k of [...subs.keys()]) {
+          if (!desired.has(k)) {
+            const [ownerUid, category] = k.split('\u0001');
+            subs.get(k)();
+            subs.delete(k);
+            const byCat = ownerItems.get(ownerUid);
+            byCat?.delete(category);
+            if (byCat && byCat.size === 0) ownerItems.delete(ownerUid);
           }
         }
-        desired.forEach((owner) => {
-          if (!subs.has(owner)) {
-            const unsub = subscribeToCollection(owner, 'debts', (data) => {
+        for (const s of incoming) {
+          const k = key(s.ownerUid, s.category);
+          const ownerUid = s.ownerUid;
+          const category = s.category || '';
+          if (!subs.has(k)) {
+            if (!ownerItems.has(ownerUid)) ownerItems.set(ownerUid, new Map());
+            ownerItems.get(ownerUid).set(category, []);
+            const unsub = subscribeToSharedDebts(ownerUid, category, (data) => {
               if (disposed) return;
-              setDebtsByOwner(prev => {
-                if (prev[owner] === data) return prev;
-                return { ...prev, [owner]: data };
-              });
+              ownerItems.get(ownerUid)?.set(category, data);
+              emit();
               setLoading(false);
             }, (err) => {
               if (disposed) return;
               setError(describeError(err, 'Could not load shared debts. Make sure sharing rules are deployed (see README).'));
               setLoading(false);
             });
-            subs.set(owner, unsub);
+            subs.set(k, unsub);
           }
-        });
+        }
+        emit();
         if (incoming.length === 0) setLoading(false);
       },
       (err) => {

@@ -80,6 +80,20 @@ export async function deleteShare(userId, email) {
   await deleteDoc(doc(db, 'users', userId, 'shares', email.trim().toLowerCase()));
 }
 
+// Shared debts for a recipient: constrain the query to the scoped
+// category so it matches the security rules. Rules reject a list query
+// that would return documents outside the shared scope.
+export function subscribeToSharedDebts(ownerUid, category, callback, onError = () => {}) {
+  const col = userCol(ownerUid, 'debts');
+  const q = category
+    ? query(col, where('category', '==', category))
+    : query(col, orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snapshot) => {
+    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    callback(items);
+  }, onError);
+}
+
 // Finds shares granted TO this email from any user, ready for a
 // collection-group query.
 export function subscribeToSharesFor(email, callback, onError = () => {}) {
