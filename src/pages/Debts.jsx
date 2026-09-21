@@ -247,7 +247,7 @@ export default function Debts() {
       </div>
 
       <div className="toolbar toolbar-inline">
-        {incomingShares.length > 0 && (
+        {(incomingShares.length > 0 || sharedError) && (
           <Tabs
             tabs={[
               { value: 'mine', label: 'My Debts' },
