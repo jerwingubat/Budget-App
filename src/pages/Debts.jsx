@@ -310,29 +310,31 @@ export default function Debts() {
                       <span className="badge badge-share">Read only</span>
                     </div>
                     <div className="debts-grid">
-                      {ownerDebts.map(d => {
-                        const paid = (d.original || 0) - (d.balance || 0);
-                        const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
-                        return (
-                          <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
-                            <div className="debt-card-head">
-                              <h4>{d.name}</h4>
-                              <span className="debt-rate">{d.rate}% APR</span>
+                      <SeeMore initial={3}>
+                        {ownerDebts.map(d => {
+                          const paid = (d.original || 0) - (d.balance || 0);
+                          const pct = d.original > 0 ? (paid / d.original) * 100 : 0;
+                          return (
+                            <div key={d.id} className={`debt-card ${pct >= 100 ? 'debt-card-paid' : ''}`}>
+                              <div className="debt-card-head">
+                                <h4>{d.name}</h4>
+                                <span className="debt-rate">{d.rate}% APR</span>
+                              </div>
+                              <div className="debt-balance">{fmt(d.balance)}</div>
+                              <ProgressBar percent={pct} size="small" />
+                              <div className="debt-category-badge">
+                                <span className="debt-cat-icon">👤</span> {(d.category || '').trim() || 'Other'}
+                              </div>
+                              <div className="debt-card-body">
+                                <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
+                                <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
+                                <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
+                                <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
+                              </div>
                             </div>
-                            <div className="debt-balance">{fmt(d.balance)}</div>
-                            <ProgressBar percent={pct} size="small" />
-                            <div className="debt-category-badge">
-                              <span className="debt-cat-icon">👤</span> {(d.category || '').trim() || 'Other'}
-                            </div>
-                            <div className="debt-card-body">
-                              <div className="debt-stat"><span>Original</span><span>{fmt(d.original)}</span></div>
-                              <div className="debt-stat"><span>Min Payment</span><span>{fmt(d.minPayment)}/mo</span></div>
-                              <div className="debt-stat"><span>Due</span><span>{d.dueDate}</span></div>
-                              <div className="debt-stat"><span>Paid Off</span><span>{pct.toFixed(0)}%</span></div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </SeeMore>
                     </div>
                   </div>
                 );
