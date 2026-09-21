@@ -4,6 +4,25 @@ import { fmt, today } from '../utils';
 import { Modal, FormField, FormRow, ProgressBar, EmptyState, useToast, SkeletonTable, Tabs, SeeMore } from '../components/UI';
 import ShareDebtsModal from '../components/ShareDebtsModal';
 
+// Sort a debt list by the selected date option. Debts with no due date
+// always go last when sorting by due date.
+function sortDebtList(list, option) {
+  const [key, dir] = option.split('-');
+  const dirFactor = dir === 'asc' ? 1 : -1;
+  return [...list].sort((a, b) => {
+    const va = key === 'due' ? (a.dueDate || '').trim() : (a.createdAt?.seconds ?? 0);
+    const vb = key === 'due' ? (b.dueDate || '').trim() : (b.createdAt?.seconds ?? 0);
+    const na = key === 'due' && !va;
+    const nb = key === 'due' && !vb;
+    if (na && nb) return 0;
+    if (na) return 1;
+    if (nb) return -1;
+    if (va < vb) return -dirFactor;
+    if (va > vb) return dirFactor;
+    return 0;
+  });
+}
+
 export default function Debts() {
   const { items: debts, add: addDebt, update: updateDebt, remove: removeDebt, loading } = useCollection('debts');
   const { items: payments, add: addPayment, remove: removePayment } = useCollection('payments');
@@ -26,8 +45,10 @@ export default function Debts() {
   const [view, setView] = useState('mine');
   const [shareModal, setShareModal] = useState(false);
   const [layout, setLayout] = useState(() => localStorage.getItem('debtsLayout') || 'grid');
+  const [sortOption, setSortOption] = useState(() => localStorage.getItem('debtsSort') || 'added-desc');
 
   useEffect(() => { localStorage.setItem('debtsLayout', layout); }, [layout]);
+  useEffect(() => { localStorage.setItem('debtsSort', sortOption); }, [sortOption]);
 
   const rulesConsoleUrl = `https://console.firebase.google.com/project/${import.meta.env.VITE_FB_PROJECTID}/firestore/rules`;
 
@@ -54,8 +75,8 @@ export default function Debts() {
       if (filterCat === 'other') list = list.filter(d => !(d.category || '').trim());
       else list = list.filter(d => (d.category || '').trim() === filterCat);
     }
-    return list;
-  }, [debts, filter, filterCat]);
+    return sortDebtList(list, sortOption);
+  }, [debts, filter, filterCat, sortOption]);
 
   const personNames = useMemo(() =>
     [...new Set(debts.map(d => (d.category || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
@@ -326,6 +347,17 @@ export default function Debts() {
             onChange={setView}
           />
         )}
+        <select
+          className="filter-select"
+          value={sortOption}
+          onChange={e => setSortOption(e.target.value)}
+          title="Sort debts by date"
+        >
+          <option value="added-desc">Sort: Date added (newest first)</option>
+          <option value="added-asc">Date added (oldest first)</option>
+          <option value="due-asc">Due date (soonest first)</option>
+          <option value="due-desc">Due date (latest first)</option>
+        </select>
         <button
           className={`btn ${layout === 'list' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
           onClick={() => setLayout(l => l === 'grid' ? 'list' : 'grid')}
@@ -364,9 +396,9 @@ export default function Debts() {
           {!sharedError && !sharedLoading && (
             <>
               {incomingShares.map(s => {
-                const ownerDebts = (debtsByOwner[s.ownerUid] || []).filter(d =>
+                const ownerDebts = sortDebtList((debtsByOwner[s.ownerUid] || []).filter(d =>
                   s.category ? (d.category || '').trim() === s.category : true
-                );
+                ), sortOption);
                 if (ownerDebts.length === 0) return null;
                 const subtotal = ownerDebts.reduce((sum, d) => sum + (d.balance || 0), 0);
                 return (
@@ -523,6 +555,17 @@ export default function Debts() {
           {debts.some(d => !(d.category || '').trim()) && (
             <option value="other">🏷 Uncategorized</option>
           )}
+        </select>
+        <select
+          className="filter-select"
+          value={sortOption}
+          onChange={e => setSortOption(e.target.value)}
+          title="Sort debts by date"
+        >
+          <option value="added-desc">Sort: Date added (newest first)</option>
+          <option value="added-asc">Date added (oldest first)</option>
+          <option value="due-asc">Due date (soonest first)</option>
+          <option value="due-desc">Due date (latest first)</option>
         </select>
       </div>
 
